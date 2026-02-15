@@ -8,6 +8,7 @@ from ..utils.doorsmanager import DoorsManager
 from ..utils.objectives import Objectives
 from ..utils.parameters import Knows, isKnows
 import logging
+from copy import deepcopy
 import sys
 
 class SMBoolManager(object):
@@ -15,15 +16,13 @@ class SMBoolManager(object):
     countItems = ['Missile', 'Super', 'PowerBomb', 'ETank', 'Reserve']
 
     percentItems = ['Bomb', 'Charge', 'Ice', 'HiJump', 'SpeedBooster', 'Wave', 'Spazer', 'SpringBall', 'Varia', 'Plasma', 'Grapple', 'Morph', 'Gravity', 'XRayScope', 'SpaceJump', 'ScrewAttack']
-    def __init__(self, player=0, maxDiff=sys.maxsize, onlyBossLeft = False, lastAP = 'Landing Site'):
+    def __init__(self, player=0, maxDiff=sys.maxsize, onlyBossLeft = False):
         self._items = { }
         self._counts = { }
 
         self.player = player
         self.maxDiff = maxDiff
         self.onlyBossLeft = onlyBossLeft
-
-        self.lastAP = lastAP
 
         # cache related
         #self.cacheKey = 0
@@ -32,10 +31,50 @@ class SMBoolManager(object):
         Logic.factory('vanilla')
         self.helpers = Logic.HelpersGraph(self)
         self.doorsManager = DoorsManager()
-        self.objectives = Objectives.objDict[player]
+        self.objectives = Objectives.objDict[player] if player in Objectives.objDict.keys() else Objectives(player)
         self.createFacadeFunctions()
         self.createKnowsFunctions(player)
         self.resetItems()
+        self.itemsPositions = {}
+
+    def __deepcopy__(self, memodict):
+        # Use __new__ to avoid calling __init__ like copy.deepcopy without __deepcopy__ implemented.
+        new = object.__new__(type(self))
+
+        # Copy everything over in the same order as __init__, ensuring that mutable attributes are deeply copied.
+
+        # SMBool instances contain mutable lists, so must be deep-copied.
+        new._items = {i: deepcopy(v, memodict) for i, v in self._items.items()}
+        # `_counts` is a dict[str, int], so the dict can be copied because its keys and values are immutable.
+        new._counts = self._counts.copy()
+        # `player` is an int.
+        new.player = self.player
+        # `maxDiff` is an int.
+        new.maxDiff = self.maxDiff
+        # `onlyBossLeft` is a bool.
+        new.onlyBossLeft = self.onlyBossLeft
+        # The HelpersGraph keeps reference to the instance, so a new HelpersGraph is required.
+        new.helpers = Logic.HelpersGraph(new)
+        # DoorsManager is stateless, so the same instance can be used.
+        new.doorsManager = self.doorsManager
+        # Objectives are cached by self.player, so will be the same instance for the copy.
+        new.objectives = self.objectives
+        # Copy the facade functions from new.helpers into new.__dict__.
+        new.createFacadeFunctions()
+        # Copying the existing 'knows' functions from `self` to `new` is faster than re-creating all the lambdas with
+        # `new.createKnowsFunctions(player)`.
+        for key in Knows.__dict__.keys():
+            if isKnows(key):
+                attribute_name = "knows"+key
+                knows_func = getattr(self, attribute_name)
+                setattr(new, attribute_name, knows_func)
+        # There is no need to call `new.resetItems()` because `_items` and `_counts` have been copied over.
+        # new.resetItems()
+        # itemsPositions is a `dict[str, tuple[int, int]]`, so the dict can be copied because the keys and values are
+        # immutable.
+        new.itemsPositions = self.itemsPositions.copy()
+
+        return new
 
     def computeItemsPositions(self):
         # compute index in cache key for each items
@@ -246,6 +285,9 @@ class SMBoolManager(object):
 class SMBoolManagerPlando(SMBoolManager):
     def __init__(self):
         super(SMBoolManagerPlando, self).__init__()
+
+    def __deepcopy__(self, memodict):
+        return super().__deepcopy__(memodict)
 
     def addItem(self, item):
         # a new item is available

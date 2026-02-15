@@ -181,6 +181,7 @@ class Item:
     keycard = re.compile("^Card")
     smMap = re.compile("^SmMap")
 
+    def IsNameDungeonItem(item_name): return Item.dungeon.match(item_name)
     def IsDungeonItem(self): return self.dungeon.match(self.Type.name)
     def IsBigKey(self): return self.bigKey.match(self.Type.name)
     def IsKey(self): return self.key.match(self.Type.name)
@@ -423,7 +424,6 @@ class Item:
         ]
 
         for item in itemPool:
-            item.Progression = True
             item.World = world
 
         return itemPool
@@ -438,7 +438,6 @@ class Item:
         ]
 
         for item in itemPool:
-            item.Progression = True
             item.World = world
 
         return itemPool
